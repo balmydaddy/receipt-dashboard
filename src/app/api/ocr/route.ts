@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
     }
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
-    let result;
+    let result: Awaited<ReturnType<typeof model.generateContent>> | undefined;
 for (let i = 0; i < 3; i++) {
   try {
     result = await model.generateContent([
@@ -47,7 +47,8 @@ for (let i = 0; i < 3; i++) {
     } else throw e;
   }
 }
-    const text = result.response.text();
+    if (!result) throw new Error("Gemini API 응답 없음");
+const text = result.response.text();
     const parsed = JSON.parse(text.replace(/```json|```/g, "").trim());
     parsed.items = (parsed.items || []).map((item: { name: string }) => ({
       ...item,
