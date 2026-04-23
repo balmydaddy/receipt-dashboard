@@ -349,6 +349,24 @@ export default function Home() {
     return () => subscription.unsubscribe();
   },[]);
 
+  // 로그인 시 Supabase에서 이력 불러오기
+  useEffect(()=>{
+    if (!user) return;
+    supabase.from("items").select("*").eq("user_id", user.id).order("created_at", { ascending: false })
+      .then(({ data }) => {
+        if (data && data.length > 0) {
+          const loaded: Item[] = data.map((r: Record<string, unknown>) => ({
+            name: String(r.name||""), qty: Number(r.qty||1),
+            unit_price: Number(r.unit_price||0), total: Number(r.total||0),
+            store: String(r.store||""), date: String(r.date||""),
+            _src: String(r.src||""), category: (r.category as Item["category"])||"기타",
+          }));
+          setAllItems(loaded);
+          toast(`클라우드에서 ${loaded.length}건 불러왔습니다`, "info");
+        }
+      });
+  },[user]);
+
   useEffect(()=>{
     if (!loaded) return;
     try { localStorage.setItem(LS_KEY,JSON.stringify(allItems)); } catch {}
@@ -445,6 +463,24 @@ export default function Home() {
     if (ok>0) toast(`${ok}장 분석 완료!`,"ok");
     if (err>0) toast(`${err}장 실패 — API 키를 확인하세요`,"err");
 
+    // 로그인 상태면 Supabase에 저장
+    if (user) {
+      const newItems = Object.values(results).flatMap(r => r.items);
+      const rows = newItems.map(item => ({
+        user_id: user.id,
+        family_code: null,
+        name: item.name, qty: item.qty,
+        unit_price: item.unit_price, total: item.total,
+        store: item.store, date: item.date,
+        src: item._src, category: item.category,
+      }));
+      if (rows.length > 0) {
+        const { error } = await supabase.from("items").insert(rows);
+        if (!error) toast("클라우드 저장 완료!", "ok");
+        else console.error("Supabase 저장 오류:", error);
+      }
+    }
+
     const newItems = Object.values(results).flatMap(r => r.items);
     const matched = newItems
       .map(item => {
@@ -463,9 +499,17 @@ export default function Home() {
     if (e) setAllItems(prev=>prev.filter(i=>i._src!==e.name));
     setFiles(prev=>prev.filter(f=>f.id!==id));
   };
-  const deleteItem = (idx:number)=>setAllItems(prev=>prev.filter((_,i)=>i!==idx));
-  const clearAll = ()=>{
+  const deleteItem = async (idx:number) => {
+    if (user) {
+      const item = allItems[idx];
+      await supabase.from("items").delete()
+        .eq("user_id", user.id).eq("name", item.name).eq("date", item.date).eq("store", item.store).limit(1);
+    }
+    setAllItems(prev=>prev.filter((_,i)=>i!==idx));
+  };
+  const clearAll = async () => {
     if (!confirm("저장된 모든 구매 이력을 삭제할까요?")) return;
+    if (user) await supabase.from("items").delete().eq("user_id", user.id);
     setAllItems([]); setFiles([]);
     toast("전체 이력을 삭제했습니다","info");
   };
