@@ -10,6 +10,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.27.0",
     "@google/generative-ai": "^0.24.1",
+    "@supabase/supabase-js": "^2.104.0",
     "@types/recharts": "^1.8.29",
     "@zxing/library": "^0.21.3",
     "html5-qrcode": "^2.3.8",

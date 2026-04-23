@@ -1,4 +1,5 @@
 "use client";
+export const dynamic = "force-dynamic";
 import { useState, useCallback, useRef, useEffect } from "react";
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
@@ -6,6 +7,10 @@ import {
   ResponsiveContainer, ReferenceLine,
 } from "recharts";
 import BarcodeScanner from "./BarcodeScanner";
+import AuthModal from "./AuthModal";
+import NameCorrectionModal from "./NameCorrectionModal";
+import { supabase } from "../lib/supabase";
+import type { User } from "@supabase/supabase-js";
 
 const CATEGORIES = [
   "식품·음료","주류","생활용품","의약품·건강","화장품·뷰티",
@@ -305,6 +310,9 @@ export default function Home() {
   const [notify, setNotify] = useState<NotifySettings>({ email: "", alerts: [] });
   const [showNotify, setShowNotify] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+  const [showAuth, setShowAuth] = useState(false);
+  const [showCorrection, setShowCorrection] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const tid = useRef(0);
 
@@ -331,6 +339,14 @@ export default function Home() {
     } catch {}
     setLoaded(true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[]);
+
+  useEffect(()=>{
+    supabase.auth.getUser().then(({ data }) => setUser(data.user));
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
+      setUser(session?.user ?? null);
+    });
+    return () => subscription.unsubscribe();
   },[]);
 
   useEffect(()=>{
@@ -528,6 +544,8 @@ export default function Home() {
   return (
     <div style={{ maxWidth:960, margin:"0 auto", padding:"1.5rem 1rem" }}>
       <ToastBar toasts={toasts}/>
+      {showAuth && <AuthModal onClose={()=>setShowAuth(false)}/>}
+      {showCorrection && <NameCorrectionModal onClose={()=>setShowCorrection(false)}/>}
       {showScanner && (
         <BarcodeScanner onScan={handleBarcodeScan} onClose={()=>setShowScanner(false)}/>
       )}
@@ -547,6 +565,15 @@ export default function Home() {
           <p style={{ fontSize:13, color:"#666", marginTop:4 }}>영수증 사진으로 구매처·가격 이력 추적 및 최저가 재구매 타이밍 분석</p>
         </div>
         <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+          {user ? (
+            <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+              <span style={{ fontSize:11, color:"#888" }}>{user.email}</span>
+              <button onClick={()=>setShowCorrection(true)} style={{ fontSize:12, padding:"6px 12px", borderRadius:8, border:"1px solid #ddd", background:"#fff", cursor:"pointer", fontWeight:600 }}>✏️ 품명보정</button>
+              <button onClick={()=>supabase.auth.signOut()} style={{ fontSize:12, padding:"6px 12px", borderRadius:8, border:"1px solid #fcc", background:"#fff9f9", cursor:"pointer", color:"#c00", fontWeight:600 }}>로그아웃</button>
+            </div>
+          ) : (
+            <button onClick={()=>setShowAuth(true)} style={{ fontSize:12, padding:"6px 12px", borderRadius:8, border:"1px solid #3B6D11", background:"#EAF3DE", cursor:"pointer", fontWeight:600, color:"#3B6D11" }}>🔐 로그인</button>
+          )}
           <button onClick={()=>setShowScanner(true)} style={{ fontSize:12, padding:"6px 12px", borderRadius:8, border:"1px solid #ddd", background:"#fff", cursor:"pointer", fontWeight:600 }}>
             📷 바코드 스캔
           </button>
