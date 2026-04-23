@@ -5,6 +5,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, ReferenceLine,
 } from "recharts";
+import BarcodeScanner from "./BarcodeScanner";
 
 const CATEGORIES = [
   "식품·음료","주류","생활용품","의약품·건강","화장품·뷰티",
@@ -303,6 +304,7 @@ export default function Home() {
   const [loaded, setLoaded] = useState(false);
   const [notify, setNotify] = useState<NotifySettings>({ email: "", alerts: [] });
   const [showNotify, setShowNotify] = useState(false);
+  const [showScanner, setShowScanner] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const tid = useRef(0);
 
@@ -346,6 +348,28 @@ export default function Home() {
       .map(f=>({ id:Math.random().toString(36).slice(2), name:f.name, status:"pending" as const, items:[], _file:f }));
     setFiles(prev=>[...prev,...entries]);
   },[]);
+
+  const handleBarcodeScan = useCallback(async (barcode: string) => {
+    setShowScanner(false);
+    toast("바코드 조회 중...", "info");
+    try {
+      const resp = await fetch("/api/barcode", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ barcode }),
+      });
+      const json = await resp.json();
+      if (json.success) {
+        const newItem: Item = {
+          name: json.data.name, qty: 1, unit_price: 0, total: 0,
+          store: "수동 등록", date: new Date().toISOString().slice(0, 10),
+          _src: `barcode_${barcode}`, category: "기타",
+        };
+        setAllItems((prev) => [...prev, newItem]);
+        toast(`"${json.data.name}" 추가됨`, "ok");
+      } else toast("바코드 조회 실패", "err");
+    } catch (e) { console.error(e); toast("바코드 조회 오류", "err"); }
+  }, []);
 
   const sendAlert = useCallback(async (matched: { name: string; target: number; current: number; store: string; date: string }[]) => {
     if (!notify.email || matched.length === 0) return;
@@ -504,6 +528,9 @@ export default function Home() {
   return (
     <div style={{ maxWidth:960, margin:"0 auto", padding:"1.5rem 1rem" }}>
       <ToastBar toasts={toasts}/>
+      {showScanner && (
+        <BarcodeScanner onScan={handleBarcodeScan} onClose={()=>setShowScanner(false)}/>
+      )}
       {showNotify && (
         <NotifyModal
           notify={notify}
@@ -520,6 +547,9 @@ export default function Home() {
           <p style={{ fontSize:13, color:"#666", marginTop:4 }}>영수증 사진으로 구매처·가격 이력 추적 및 최저가 재구매 타이밍 분석</p>
         </div>
         <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+          <button onClick={()=>setShowScanner(true)} style={{ fontSize:12, padding:"6px 12px", borderRadius:8, border:"1px solid #ddd", background:"#fff", cursor:"pointer", fontWeight:600 }}>
+            📷 바코드 스캔
+          </button>
           <button onClick={()=>setShowNotify(true)} style={{ fontSize:12, padding:"6px 12px", borderRadius:8, border:"1px solid "+(notify.alerts.length>0?"#3B6D11":"#ddd"), background:notify.alerts.length>0?"#EAF3DE":"#fff", cursor:"pointer", fontWeight:600, color:notify.alerts.length>0?"#3B6D11":"#222" }}>
             🔔 가격 알림{notify.alerts.length>0?` (${notify.alerts.length})`:""}
           </button>
